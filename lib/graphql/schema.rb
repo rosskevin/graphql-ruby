@@ -13,7 +13,11 @@ module GraphQL
   class Schema
     extend Forwardable
 
-    DIRECTIVES = [GraphQL::Directive::SkipDirective, GraphQL::Directive::IncludeDirective]
+    DIRECTIVES = [
+      GraphQL::Directive::SkipDirective,
+      GraphQL::Directive::IncludeDirective,
+      GraphQL::Directive::DeferDirective,
+    ]
     DYNAMIC_FIELDS = ["__type", "__typename", "__schema"]
 
     attr_reader :query, :mutation, :subscription, :directives, :static_validator

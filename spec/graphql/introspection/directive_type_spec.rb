@@ -42,6 +42,14 @@ describe GraphQL::Introspection::DirectiveType do
             "onFragment" => true,
             "onOperation" => false,
           },
+          {
+            "name"=>"defer",
+            "args"=>[],
+            "locations"=>["FIELD", "FRAGMENT_SPREAD", "INLINE_FRAGMENT"],
+            "onField"=>true,
+            "onFragment"=>true,
+            "onOperation"=>false,
+          },
         ]
       }
     }}

@@ -57,7 +57,7 @@ module GraphQL
             resolved_type = field_type.resolve_type(value, execution_context)
 
             unless resolved_type.is_a?(GraphQL::ObjectType)
-              raise GraphQL::ObjectType::UnresolvedTypeError.new(ast_field.name, field_type, parent_type)
+              raise GraphQL::ObjectType::UnresolvedTypeError.new(field_type, value)
             end
 
             strategy_class = get_strategy_for_kind(resolved_type.kind)
