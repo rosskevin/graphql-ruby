@@ -32,11 +32,12 @@ end
 
 describe GraphQL::Execution::DeferredExecution do
   before do
+    @prev_execution_strategy = DummySchema.query_execution_strategy
     DummySchema.query_execution_strategy = GraphQL::Execution::DeferredExecution
   end
 
   after do
-    DummySchema.query_execution_strategy = GraphQL::Query::SerialExecution
+    DummySchema.query_execution_strategy = @prev_execution_strategy
   end
 
   let(:query_string) {%|
@@ -217,12 +218,12 @@ describe GraphQL::Execution::DeferredExecution do
         result
         assert_equal(3, collector.patches.length)
         assert_equal([], collector.patches[0][:path])
-        assert_equal([{"message" => "There was an execution error"}], collector.patches[0][:value]["errors"])
+        assert_equal([{"message" => "There was an execution error", "locations"=>[{"line"=>3, "column"=>11}]}], collector.patches[0][:value]["errors"])
         assert_equal({"error1"=>nil, "error2"=>nil, "error3"=>nil}, collector.patches[0][:value]["data"])
         assert_equal(["errors", 1], collector.patches[1][:path])
-        assert_equal({"message"=>"There was an execution error"}, collector.patches[1][:value])
+        assert_equal({"message"=>"There was an execution error", "locations"=>[{"line"=>4, "column"=>11}]}, collector.patches[1][:value])
         assert_equal(["errors", 2], collector.patches[2][:path])
-        assert_equal({"message"=>"There was an execution error"}, collector.patches[2][:value])
+        assert_equal({"message"=>"There was an execution error", "locations"=>[{"line"=>5, "column"=>11}]}, collector.patches[2][:value])
       end
     end
 

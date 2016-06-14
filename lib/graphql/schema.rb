@@ -46,7 +46,7 @@ module GraphQL
       @rescue_middleware = GraphQL::Schema::RescueMiddleware.new
       @middleware = [@rescue_middleware]
       # Default to the built-in execution strategy:
-      self.query_execution_strategy = GraphQL::Query::SerialExecution
+      self.query_execution_strategy = GraphQL::Execution::DeferredExecution
       self.mutation_execution_strategy = GraphQL::Query::SerialExecution
       self.subscription_execution_strategy = GraphQL::Query::SerialExecution
     end
