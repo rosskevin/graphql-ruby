@@ -1,8 +1,5 @@
 require "spec_helper"
-#
-# TODO port tests to new module
-#
-#
+
 describe GraphQL::Query::SerialExecution::ValueResolution do
   let(:query_root) {
     day_of_week_enum = GraphQL::EnumType.define do

@@ -1,6 +1,6 @@
 require "spec_helper"
 
-describe GraphQL::Execution::Context do
+describe GraphQL::Query::SerialExecution::ExecutionContext do
   let(:query_string) { %|
     query getFlavor($cheeseId: Int!) {
       brie: cheese(id: 1)   { ...cheeseFields, taste: flavor }
@@ -17,7 +17,7 @@ describe GraphQL::Execution::Context do
     operation_name: operation_name,
   )}
   let(:execution_context) {
-    GraphQL::Execution::Context.new(query, nil)
+    GraphQL::Query::SerialExecution::ExecutionContext.new(query, nil)
   }
 
   describe "add_error" do

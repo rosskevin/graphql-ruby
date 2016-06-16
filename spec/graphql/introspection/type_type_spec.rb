@@ -26,7 +26,6 @@ describe GraphQL::Introspection::TypeType do
     {"name"=>"GOAT",  "isDeprecated"=> false },
     {"name"=>"SHEEP", "isDeprecated"=> false },
   ]}
-
   it "exposes metadata about types" do
     expected = {"data"=> {
       "cheeseType" => {
