@@ -47,7 +47,7 @@ module GraphQL
       # Flatten individual selection, `ast_node`
       # @return [Hash<String, GraphQL::Language::Nodes::Field>] The mergeable result for this node
       def flatten_selection(exec_context, value, type_defn, ast_node)
-        if !GraphQL::Query::DirectiveResolution.include_node?(ast_node, exec_context.query)
+        if GraphQL::Execution::DirectiveChecks.skip?(ast_node, exec_context.query)
           {}
         else
           case ast_node

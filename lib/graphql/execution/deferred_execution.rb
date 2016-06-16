@@ -107,7 +107,7 @@ module GraphQL
       # If this `frame` is marked as defer, add it to `defers`
       # Otherwise, resolve it.
       def resolve_or_defer_frame(scope, thread, frame)
-        if frame.node.directives.any? { |dir| dir.name == "defer" }
+        if GraphQL::Execution::DirectiveChecks.defer?(frame.node)
           thread.defers << frame
           nil
         else
