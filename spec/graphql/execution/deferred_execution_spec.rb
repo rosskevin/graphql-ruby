@@ -67,8 +67,6 @@ describe GraphQL::Execution::DeferredExecution do
           "cheese" => {
             "id" => 1,
             "flavor" => "Brie",
-            "origin" => nil,
-            "cheeseSource" => nil,
           }
         }}
       }
@@ -116,10 +114,10 @@ describe GraphQL::Execution::DeferredExecution do
       assert_equal 3, collector.patches.length
 
       assert_equal([], collector.patches[0][:path])
-      assert_equal({ "data" => {"cheese" => nil} }, collector.patches[0][:value])
+      assert_equal({ "data" => {} }, collector.patches[0][:value])
 
       assert_equal(["data", "cheese"], collector.patches[1][:path])
-      assert_equal({"id" => 1, "flavor" => "Brie", "origin" => nil}, collector.patches[1][:value])
+      assert_equal({"id" => 1, "flavor" => "Brie"}, collector.patches[1][:value])
 
       assert_equal(["data", "cheese", "origin"], collector.patches[2][:path])
       assert_equal("France", collector.patches[2][:value])
@@ -145,14 +143,14 @@ describe GraphQL::Execution::DeferredExecution do
       expected_patches = [
         {
           path: [],
-          value: { "data" => {"cheeses"=>nil} }
+          value: { "data" => {} }
         },
         {
           path: ["data", "cheeses"],
           value: [
-            {"id"=>1, "chzFlav"=>nil, "similarCheese"=>{"id"=>1, "flavor"=>nil}},
-            {"id"=>2, "chzFlav"=>nil, "similarCheese"=>{"id"=>1, "flavor"=>nil}},
-            {"id"=>3, "chzFlav"=>nil, "similarCheese"=>{"id"=>1, "flavor"=>nil}}
+            {"id"=>1, "similarCheese"=>{"id"=>1}},
+            {"id"=>2, "similarCheese"=>{"id"=>1}},
+            {"id"=>3, "similarCheese"=>{"id"=>1}}
           ]
         },
         {
@@ -219,7 +217,7 @@ describe GraphQL::Execution::DeferredExecution do
         assert_equal(3, collector.patches.length)
         assert_equal([], collector.patches[0][:path])
         assert_equal([{"message" => "There was an execution error", "locations"=>[{"line"=>3, "column"=>11}]}], collector.patches[0][:value]["errors"])
-        assert_equal({"error1"=>nil, "error2"=>nil, "error3"=>nil}, collector.patches[0][:value]["data"])
+        assert_equal({"error1"=>nil}, collector.patches[0][:value]["data"])
         assert_equal(["errors", 1], collector.patches[1][:path])
         assert_equal({"message"=>"There was an execution error", "locations"=>[{"line"=>4, "column"=>11}]}, collector.patches[1][:value])
         assert_equal(["errors", 2], collector.patches[2][:path])

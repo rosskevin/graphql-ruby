@@ -9,6 +9,10 @@ module GraphQL
     class DeferredExecution
       include GraphQL::Language
 
+      # Returned by {.resolve_or_defer_frame} to signal that the frame's
+      # result was defered, so it should be empty in the patch.
+      DEFERRED_RESULT = :__deferred_result__
+
       def execute(ast_operation, root_type, query_object)
         collector = query_object.context[:collector]
 
@@ -24,7 +28,12 @@ module GraphQL
         initial_result = resolve_or_defer_frame(scope, initial_thread, initial_frame)
 
         if collector
-          initial_patch = {"data" => initial_result}
+          initial_data = if initial_result == DEFERRED_RESULT
+            {}
+          else
+            initial_result
+          end
+          initial_patch = {"data" => initial_data}
 
           initial_errors = initial_thread.errors + query_object.context.errors
           error_idx = initial_errors.length
@@ -109,7 +118,7 @@ module GraphQL
       def resolve_or_defer_frame(scope, thread, frame)
         if GraphQL::Execution::DirectiveChecks.defer?(frame.node)
           thread.defers << frame
-          nil
+          DEFERRED_RESULT
         else
           resolve_frame(scope, thread, frame)
         end
@@ -161,7 +170,9 @@ module GraphQL
           )
 
           inner_result = resolve_or_defer_frame(scope, thread, inner_frame)
-          memo[selection_key] = inner_result
+          if inner_result != DEFERRED_RESULT
+            memo[selection_key] = inner_result
+          end
         end
         resolved_selections
       rescue GraphQL::InvalidNullError => err
