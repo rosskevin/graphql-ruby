@@ -6,7 +6,7 @@ class ArrayCollector
     @patches = []
   end
 
-  def patch(path, value)
+  def patch(path:, value:)
     patches << {path: path, value: value}
   end
 

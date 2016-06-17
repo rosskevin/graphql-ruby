@@ -21,7 +21,7 @@ module GraphQL
     #     # Accept a patch from GraphQL and send it to the client.
     #     # Include `query_id` so that the client knows which
     #     # response to merge this patch into.
-    #     def patch(path, value)
+    #     def patch(path:, value:)
     #       @websocket_conn.send({
     #          query_id: @query_id,
     #          path: path,
@@ -93,7 +93,10 @@ module GraphQL
             initial_patch["errors"] = initial_errors.map(&:to_h)
           end
 
-          collector.patch([], initial_patch)
+          collector.patch(
+            path: [],
+            value: initial_patch
+          )
 
           defers = initial_thread.defers
           while defers.any?
@@ -103,10 +106,16 @@ module GraphQL
               deferred_result = resolve_frame(scope, deferred_thread, deferred_frame)
               # No use patching for nil, that's there already
               if !deferred_result.nil?
-                collector.patch(["data"] + deferred_frame.path, deferred_result)
+                collector.patch(
+                  path: ["data"] + deferred_frame.path,
+                  value: deferred_result
+                )
               end
               deferred_thread.errors.each do |deferred_error|
-                collector.patch(["errors", error_idx], deferred_error.to_h)
+                collector.patch(
+                  path: ["errors", error_idx],
+                  value: deferred_error.to_h
+                )
                 error_idx += 1
               end
               next_defers.push(*deferred_thread.defers)
