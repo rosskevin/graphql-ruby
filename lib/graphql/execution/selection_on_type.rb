@@ -63,13 +63,15 @@ module GraphQL
         end
       end
 
+      # Return a hash of selections from `ast_fragment` which apply to `type_defn`.
+      # If no selections apply, it will be an empty hash.
+      # @return [Hash<String, GraphQL::Language::Nodes::Field>] Selections to merge
       def flatten_fragment(exec_context, value, type_defn, ast_fragment)
         can_apply = if ast_fragment.type.nil?
           true
         else
           frag_type = exec_context.get_type(ast_fragment.type)
-          resolved_type = GraphQL::Execution::ResolveType.resolve(value, frag_type, type_defn, exec_context.query.context)
-          !resolved_type.nil?
+          GraphQL::Execution::Typecast.compatible?(value, type_defn, frag_type, exec_context.query.context)
         end
 
         if can_apply

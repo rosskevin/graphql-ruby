@@ -4,17 +4,68 @@ module GraphQL
     # `{ path: [...], value: ... }` patches as it
     # resolves the query.
     #
-    # TODO: how to handle if a selection set defers one member,
-    # but a later member gets InvalidNullError?
+    # @example Using DeferredExecution for your schema
+    #   MySchema.query_execution_strategy = GraphQL::Execution::DeferredExecution
+    #
+    # @example A "collector" class which accepts patches and forwards them
+    #   # Take patches from GraphQL and forward them to clients over a websocket.
+    #   # (This is pseudo-code, I don't know a websocket library that works this way.)
+    #   class WebsocketCollector
+    #     # Accept `query_id` from the client, which allows the
+    #     # client to identify patches as they come in.
+    #     def initialize(query_id, websocket_conn)
+    #       @query_id = query_id
+    #       @websocket_conn = websocket_conn
+    #     end
+    #
+    #     # Accept a patch from GraphQL and send it to the client.
+    #     # Include `query_id` so that the client knows which
+    #     # response to merge this patch into.
+    #     def patch(path, value)
+    #       @websocket_conn.send({
+    #          query_id: @query_id,
+    #          path: path,
+    #          value: value,
+    #       })
+    #     end
+    #   end
+    #
+    # @example Executing a query with a collector
+    #   collector = WebsocketCollector.new(params[:query_id], websocket_conn)
+    #   query_ctx = {collector: collector, current_user: current_user}
+    #   MySchema.execute(query_string, variables: variables, context: query_ctx)
+    #   # Ignore the return value -- it will be emitted via `WebsocketCollector#patch`
+    #
+    # @example Executing a query WITHOUT a collector
+    #   query_ctx = {collector: nil, current_user: current_user}
+    #   result = MySchema.execute(query_string, variables: variables, context: query_ctx)
+    #   # `result` contains any non-deferred fields
+    #   render json: result
+    #
     class DeferredExecution
       include GraphQL::Language
+      # This key in context will be used to send patches.
+      CONTEXT_PATCH_TARGET = :collector
 
       # Returned by {.resolve_or_defer_frame} to signal that the frame's
       # result was defered, so it should be empty in the patch.
       DEFERRED_RESULT = :__deferred_result__
 
+      # Execute `ast_operation`, a member of `query_object`, starting from `root_type`.
+      #
+      # Results will be sent to `query_object.context[CONTEXT_PATCH_TARGET]` in the form
+      # of `#patch(path, value)`.
+      #
+      # If the patch target is absent, no patches will be sent.
+      #
+      # This method always returns the initial result
+      # and shoves any inital errors in to `query_object.context.errors`.
+      # For queries with no defers, you can leave out a patch target and simply
+      # use the return value.
+      #
+      # @return [Object] the initial result, without any defers
       def execute(ast_operation, root_type, query_object)
-        collector = query_object.context[:collector]
+        collector = query_object.context[CONTEXT_PATCH_TARGET]
 
         scope = ExecScope.new(query_object)
         initial_thread = ExecThread.new
@@ -69,7 +120,8 @@ module GraphQL
         initial_result
       end
 
-      # Global, window-like object for a query
+      # Global, immutable environment for executing `query`.
+      # Passed through all execution to provide type, fragment and field lookup.
       class ExecScope
         attr_reader :query, :schema
 
@@ -86,12 +138,18 @@ module GraphQL
           @query.fragments[name]
         end
 
+        # This includes dynamic fields like __typename
         def get_field(type, name)
           @schema.get_field(type, name) || raise("No field named '#{name}' found for #{type}")
         end
       end
 
-      # One serial stream of execution
+      # One serial stream of execution. One thread runs the initial query,
+      # then any deferred frames are restarted with their own threads.
+      #
+      # - {ExecThread#errors} contains errors during this part of the query
+      # - {ExecThread#defers} contains {ExecFrame}s which were marked as `@defer`
+      #   and will be executed with their own threads later.
       class ExecThread
         attr_reader :errors, :defers
         def initialize
@@ -100,7 +158,12 @@ module GraphQL
         end
       end
 
-      # One step of execution
+      # One step of execution. Each step in execution gets its own frame.
+      #
+      # - {ExecFrame#node} is the AST node which is being interpreted
+      # - {ExecFrame#path} is like a stack trace, it is used for patching deferred values
+      # - {ExecFrame#value} is the object being exposed by GraphQL at this point
+      # - {ExecFrame#type} is the GraphQL type which exposes {#value} at this point
       class ExecFrame
         attr_reader :node, :path, :type, :value
         def initialize(node:, path:, type:, value:)
@@ -114,7 +177,8 @@ module GraphQL
       private
 
       # If this `frame` is marked as defer, add it to `defers`
-      # Otherwise, resolve it.
+      # and return {DEFERRED_RESULT}
+      # Otherwise, resolve it and return its value.
       def resolve_or_defer_frame(scope, thread, frame)
         if GraphQL::Execution::DirectiveChecks.defer?(frame.node)
           thread.defers << frame
@@ -124,8 +188,8 @@ module GraphQL
         end
       end
 
-      # Determine this frame's result and write it into `#result`.
-      # Anything marked as `@defer` will be deferred.
+      # Determine this frame's result and return it
+      # Any subselections marked as `@defer` will be deferred.
       def resolve_frame(scope, thread, frame)
         ast_node = frame.node
         case ast_node
@@ -139,18 +203,21 @@ module GraphQL
           field_result = resolve_field_frame(scope, thread, frame, field_defn)
           return_type_defn = field_defn.type
 
-            resolve_value(
-              scope,
-              thread,
-              frame,
-              field_result,
-              return_type_defn,
-            )
+          resolve_value(
+            scope,
+            thread,
+            frame,
+            field_result,
+            return_type_defn,
+          )
         else
           raise("No defined resolution for #{ast_node.class.name} (#{ast_node})")
         end
       end
 
+      # Recursively resolve selections on `outer_frame.node`.
+      # Return a `Hash<String, Any>` of identifiers and results.
+      # Deferred fields will be absent from the result.
       def resolve_selections(scope, thread, outer_frame)
         merged_selections = GraphQL::Execution::SelectionOnType.flatten(
           scope,
@@ -160,7 +227,11 @@ module GraphQL
         )
 
         resolved_selections = merged_selections.each_with_object({}) do |ast_selection, memo|
-          selection_key = path_step(ast_selection)
+          selection_key = if ast_selection.is_a?(Nodes::Field)
+            ast_selection.alias || ast_selection.name
+          else
+            ast_selection.name
+          end
 
           inner_frame = ExecFrame.new(
             node: ast_selection,
@@ -180,15 +251,10 @@ module GraphQL
         nil
       end
 
-      def path_step(ast_node)
-        case ast_node
-        when Nodes::Field
-          ast_node.alias || ast_node.name
-        else
-          ast_node.name
-        end
-      end
-
+      # Resolve `field_defn` on `frame.node`, returning the value
+      # of the {Field#resolve} proc.
+      # It might be an error or an object, not ready for serialization yet.
+      # @return [Object] the return value from `field_defn`'s resolve proc
       def resolve_field_frame(scope, thread, frame, field_defn)
         ast_node = frame.node
         type_defn = frame.type
@@ -232,6 +298,10 @@ module GraphQL
         resolve_fn_value
       end
 
+      # Recursively finish `value` which was returned from `frame`,
+      # expected to be an instance of `type_defn`.
+      # This coerces terminals and recursively resolves non-terminals (object, list, non-null).
+      # @return [Object] the response-ready version of `value`
       def resolve_value(scope, thread, frame, value, type_defn)
         if value.nil? || value.is_a?(GraphQL::ExecutionError)
           if type_defn.kind.non_null?
