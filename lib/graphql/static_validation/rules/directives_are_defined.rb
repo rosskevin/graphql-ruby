@@ -15,6 +15,7 @@ module GraphQL
       def validate_directive(ast_directive, directive_names, errors)
         if !directive_names.include?(ast_directive.name)
           errors << message("Directive @#{ast_directive.name} is not defined", ast_directive)
+          GraphQL::Language::Visitor::SKIP
         end
       end
     end

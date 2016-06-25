@@ -50,6 +50,14 @@ describe GraphQL::Introspection::DirectiveType do
             "onFragment"=>true,
             "onOperation"=>false,
           },
+          {
+            "name"=>"stream",
+            "args"=>[],
+            "locations"=>["FIELD"],
+            "onField"=>true,
+            "onFragment"=>false,
+            "onOperation"=>false,
+          },
         ]
       }
     }}

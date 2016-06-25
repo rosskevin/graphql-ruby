@@ -6,12 +6,18 @@ module GraphQL
       SKIP = "skip"
       INCLUDE = "include"
       DEFER = "defer"
+      STREAM = "stream"
 
       module_function
 
       # @return [Boolean] Should this AST node be deferred?
       def defer?(ast_node)
         ast_node.directives.any? { |dir| dir.name == DEFER }
+      end
+
+      # @return [Boolean] Should this AST node be streamed?
+      def stream?(ast_node)
+        ast_node.directives.any? { |dir| dir.name == STREAM }
       end
 
       # @return [Boolean] Should this AST node be skipped altogether?

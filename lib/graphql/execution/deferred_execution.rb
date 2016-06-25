@@ -101,16 +101,41 @@ module GraphQL
           defers = initial_thread.defers
           while defers.any?
             next_defers = []
-            defers.each do |deferred_frame|
+            defers.each do |deferral|
               deferred_thread = ExecThread.new
-              deferred_result = resolve_frame(scope, deferred_thread, deferred_frame)
-              # No use patching for nil, that's there already
+              case deferral
+              when ExecFrame
+                deferred_frame = deferral
+                deferred_result = resolve_frame(scope, deferred_thread, deferred_frame)
+
+              when ExecStream
+                begin
+                  list_frame = deferral.frame
+                  inner_type = deferral.type
+                  item, idx = deferral.enumerator.next
+                  deferred_frame = ExecFrame.new({
+                    node: list_frame.node,
+                    path: list_frame.path + [idx],
+                    type: inner_type,
+                    value: item,
+                  })
+                  deferred_result = resolve_value(scope, deferred_thread, deferred_frame, item, inner_type)
+                  deferred_thread.defers << deferral
+                rescue StopIteration
+                  # The enum is done
+                end
+              else
+                raise("Can't continue deferred #{deferred_frame.class.name}")
+              end
+
+              # TODO: Should I patch nil?
               if !deferred_result.nil?
                 collector.patch(
                   path: ["data"] + deferred_frame.path,
                   value: deferred_result
                 )
               end
+
               deferred_thread.errors.each do |deferred_error|
                 collector.patch(
                   path: ["errors", error_idx],
@@ -180,6 +205,20 @@ module GraphQL
           @path = path
           @type = type
           @value = value
+        end
+      end
+
+      # Contains the list field's ExecFrame
+      # And the enumerator which is being mapped
+      # - {ExecStream#enumerator} is an Enumerator which yields `item, idx`
+      # - {ExecStream#frame} is the {ExecFrame} for the list selection (where `@stream` was present)
+      # - {ExecStream#type} is the inner type of the list (the item's type)
+      class ExecStream
+        attr_reader :enumerator, :frame, :type
+        def initialize(enumerator:, frame:, type:)
+          @enumerator = enumerator
+          @frame = frame
+          @type = type
         end
       end
 
@@ -327,16 +366,27 @@ module GraphQL
             resolve_value(scope, thread, frame, value, wrapped_type)
           when GraphQL::TypeKinds::LIST
             wrapped_type = type_defn.of_type
-            resolved_values = value.each_with_index.map do |item, idx|
-              inner_frame = ExecFrame.new({
-                node: frame.node,
-                path: frame.path + [idx],
+            items_enumerator = value.map.with_index
+            if GraphQL::Execution::DirectiveChecks.stream?(frame.node)
+              thread.defers << ExecStream.new(
+                enumerator: items_enumerator,
+                frame: frame,
                 type: wrapped_type,
-                value: item,
-              })
-              resolve_value(scope, thread, inner_frame, item, wrapped_type)
+              )
+              # The streamed list is empty in the initial resolve:
+              []
+            else
+              resolved_values = items_enumerator.each do |item, idx|
+                inner_frame = ExecFrame.new({
+                  node: frame.node,
+                  path: frame.path + [idx],
+                  type: wrapped_type,
+                  value: item,
+                })
+                resolve_value(scope, thread, inner_frame, item, wrapped_type)
+              end
+              resolved_values
             end
-            resolved_values
           when GraphQL::TypeKinds::INTERFACE, GraphQL::TypeKinds::UNION
             resolved_type = type_defn.resolve_type(value, scope)
 

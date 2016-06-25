@@ -17,6 +17,7 @@ module GraphQL
       GraphQL::Directive::SkipDirective,
       GraphQL::Directive::IncludeDirective,
       GraphQL::Directive::DeferDirective,
+      GraphQL::Directive::StreamDirective,
     ]
     DYNAMIC_FIELDS = ["__type", "__typename", "__schema"]
 

@@ -40,23 +40,23 @@ describe GraphQL::Execution::DeferredExecution do
     DummySchema.query_execution_strategy = @prev_execution_strategy
   end
 
-  let(:query_string) {%|
-    {
-      cheese(id: 1) {
-        id
-        flavor
-        origin @defer
-        cheeseSource: source @defer
-      }
-    }
-  |}
-
   let(:collector) { ArrayCollector.new }
   let(:result) {
     DummySchema.execute(query_string, context: {collector: collector})
   }
 
   describe "@defer-ed fields" do
+    let(:query_string) {%|
+      {
+        cheese(id: 1) {
+          id
+          flavor
+          origin @defer
+          cheeseSource: source @defer
+        }
+      }
+    |}
+
     it "emits them later" do
       result
       assert_equal 3, collector.patches.length
@@ -137,7 +137,7 @@ describe GraphQL::Execution::DeferredExecution do
         }
       }
       |}
-    it "patches the list, then the members" do
+    it "patches the whole list, then the member fields" do
       result
       assert_equal 8, collector.patches.length
       expected_patches = [
@@ -238,5 +238,32 @@ describe GraphQL::Execution::DeferredExecution do
         assert_equal 0, collector.patches.length
       end
     end
+  end
+
+  describe "@stream-ed fields" do
+    let(:query_string) {%|
+    {
+      cheeses @stream {
+        id
+      }
+    }
+    |}
+
+    it "pushes an empty list, then each item" do
+      result
+
+      assert_equal(4, collector.patches.length)
+      assert_equal([], collector.patches[0][:path])
+      assert_equal({"data" => { "cheeses" => [] } }, collector.patches[0][:value])
+      assert_equal(["data", "cheeses", 0], collector.patches[1][:path])
+      assert_equal({"id"=>1}, collector.patches[1][:value])
+      assert_equal(["data", "cheeses", 1], collector.patches[2][:path])
+      assert_equal({"id"=>2}, collector.patches[2][:value])
+      assert_equal(["data", "cheeses", 2], collector.patches[3][:path])
+      assert_equal({"id"=>3}, collector.patches[3][:value])
+    end
+
+    it "supports lazy enumeration"
+    it "defers nested defers"
   end
 end
