@@ -361,6 +361,14 @@ module GraphQL
           case type_defn.kind
           when GraphQL::TypeKinds::SCALAR, GraphQL::TypeKinds::ENUM
             type_defn.coerce_result(value)
+          when GraphQL::TypeKinds::INTERFACE, GraphQL::TypeKinds::UNION
+            resolved_type = type_defn.resolve_type(value, scope)
+
+            if !resolved_type.is_a?(GraphQL::ObjectType)
+              raise GraphQL::ObjectType::UnresolvedTypeError.new(type_defn, value)
+            else
+              resolve_value(scope, thread, frame, value, resolved_type)
+            end
           when GraphQL::TypeKinds::NON_NULL
             wrapped_type = type_defn.of_type
             resolve_value(scope, thread, frame, value, wrapped_type)
@@ -386,14 +394,6 @@ module GraphQL
                 resolve_value(scope, thread, inner_frame, item, wrapped_type)
               end
               resolved_values
-            end
-          when GraphQL::TypeKinds::INTERFACE, GraphQL::TypeKinds::UNION
-            resolved_type = type_defn.resolve_type(value, scope)
-
-            if !resolved_type.is_a?(GraphQL::ObjectType)
-              raise GraphQL::ObjectType::UnresolvedTypeError.new(type_defn, value)
-            else
-              resolve_value(scope, thread, frame, value, resolved_type)
             end
           when GraphQL::TypeKinds::OBJECT
             inner_frame = ExecFrame.new(

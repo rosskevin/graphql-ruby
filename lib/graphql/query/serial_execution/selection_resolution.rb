@@ -41,14 +41,20 @@ module GraphQL
         end
 
         def flatten_inline_fragment(ast_node)
-          return {} unless GraphQL::Query::DirectiveResolution.include_node?(ast_node, execution_context.query)
-          flatten_fragment(ast_node)
+          if GraphQL::Execution::DirectiveChecks.skip?(ast_node, execution_context.query)
+            {}
+          else
+            flatten_fragment(ast_node)
+          end
         end
 
         def flatten_fragment_spread(ast_node)
-          return {} unless GraphQL::Query::DirectiveResolution.include_node?(ast_node, execution_context.query)
-          ast_fragment_defn = execution_context.get_fragment(ast_node.name)
-          flatten_fragment(ast_fragment_defn)
+          if GraphQL::Execution::DirectiveChecks.skip?(ast_node, execution_context.query)
+            {}
+          else
+            ast_fragment_defn = execution_context.get_fragment(ast_node.name)
+            flatten_fragment(ast_fragment_defn)
+          end
         end
 
         def flatten_fragment(ast_fragment)
@@ -89,13 +95,16 @@ module GraphQL
         end
 
         def resolve_field(ast_node)
-          return {} unless GraphQL::Query::DirectiveResolution.include_node?(ast_node, execution_context.query)
-          execution_context.strategy.field_resolution.new(
-            ast_node,
-            type,
-            target,
-            execution_context
-          ).result
+          if GraphQL::Execution::DirectiveChecks.skip?(ast_node, execution_context.query)
+            {}
+          else
+            execution_context.strategy.field_resolution.new(
+              ast_node,
+              type,
+              target,
+              execution_context
+            ).result
+          end
         end
 
         def merge_into_result(memo, selection)

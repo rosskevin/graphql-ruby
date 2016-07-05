@@ -20,6 +20,7 @@ module GraphQL
         ast_node.directives.any? { |dir| dir.name == STREAM }
       end
 
+      # This covers `@include(if:)` & `@skip(if:)`
       # @return [Boolean] Should this AST node be skipped altogether?
       def skip?(ast_node, query)
         ast_node.directives.each do |ast_directive|
