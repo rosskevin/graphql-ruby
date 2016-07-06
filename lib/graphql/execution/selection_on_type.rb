@@ -8,8 +8,8 @@ module GraphQL
       # - Check if fragments apply to `value`
       # - dedup any same-named fields
       # @return [Array<GraphQL::Language::Nodes::Field] flattened selections
-      def flatten(exec_context, value, type_defn, ast_node)
-        merged_selections = flatten_selections(exec_context, value, type_defn, ast_node)
+      def flatten(exec_context, value, type_defn, ast_selection_nodes)
+        merged_selections = flatten_selections(exec_context, value, type_defn, ast_selection_nodes)
         merged_selections.values
       end
 
@@ -18,10 +18,8 @@ module GraphQL
       module_function
       # Flatten selections on `ast_node`
       # @return [Hash<String, GraphQL::Language::Nodes::Field>] name-field pairs for flattened selections
-      def flatten_selections(exec_context, value, type_defn, ast_node)
-        selections = ast_node.selections
-
-        merged_selections = selections.reduce({}) do |result, ast_selection|
+      def flatten_selections(exec_context, value, type_defn, ast_selection_nodes)
+        merged_selections = ast_selection_nodes.reduce({}) do |result, ast_selection|
           flattened_selections = flatten_selection(exec_context, value, type_defn, ast_selection)
           flattened_selections.each do |name, selection|
             result[name] = if result.key?(name) && selection.selections.any?
@@ -75,7 +73,7 @@ module GraphQL
         end
 
         if can_apply
-          flatten_selections(exec_context, value, type_defn, ast_fragment)
+          flatten_selections(exec_context, value, type_defn, ast_fragment.selections)
         else
           {}
         end

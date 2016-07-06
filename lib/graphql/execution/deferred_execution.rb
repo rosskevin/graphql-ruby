@@ -271,7 +271,7 @@ module GraphQL
           scope,
           outer_frame.value,
           outer_frame.type,
-          outer_frame.node,
+          outer_frame.node.selections,
         )
 
         resolved_selections = merged_selections.each_with_object({}) do |ast_selection, memo|
